@@ -1,0 +1,7 @@
+[package]
+name = "logic_parser"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+untwine = "0.9.3"
