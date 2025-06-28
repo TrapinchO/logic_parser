@@ -79,7 +79,6 @@ fn interpret_(expr: Expr, vars: HashMap<String, bool>) -> bool {
     }
 }
 
-// TODO: use hashset
 fn get_vars(expr: Expr) -> HashSet<String> {
     let mut set = HashSet::new();
     set.extend(get_vars_(expr));
@@ -118,12 +117,12 @@ fn get_vars_(expr: Expr) -> Vec<String> {
     }
 }
 
-fn make_table(expr: Expr) -> Vec<HashMap<String, bool>> {
-    let vars = get_vars(expr);
-    let mut ls: Vec<HashMap<String, bool>> = vec![HashMap::from([("<".to_string(), false)])];
+fn make_table(vars: HashSet<String>) -> Vec<HashMap<String, bool>> {
+    // needs temporary entry so that the vector is not empty
+    let mut tables: Vec<HashMap<String, bool>> = vec![HashMap::from([("<".to_string(), false)])];
     for v in vars {
         let mut ls2 = vec![];
-        for table in ls {
+        for table in tables {
             let mut new_table = table.clone();
             let mut new_table2 = table.clone();
             new_table.insert(v.clone(), false);
@@ -131,17 +130,15 @@ fn make_table(expr: Expr) -> Vec<HashMap<String, bool>> {
             ls2.push(new_table);
             ls2.push(new_table2);
         }
-        ls = ls2;
+        tables = ls2;
     }
-    ls
-}
-
-fn b2i(b: bool) -> i32 {
-    if b {
-        1
-    } else {
-        0
+    let mut tables2 = vec![];
+    for t in tables {
+        let mut t2 = t.clone();
+        t2.remove("<");
+        tables2.push(t2);
     }
+    tables2
 }
 
 fn main() {
@@ -165,17 +162,24 @@ fn main() {
                 .collect::<Vec<String>>()
                 .join(" | ")
         );
+        println!(
+            "|-{}-|--------|",
+            vars.iter()
+                .map(|k| "-".repeat(k.len()))
+                .collect::<Vec<String>>()
+                .join("-|-")
+        );
 
-        let table = make_table(ast.clone());
+        let table = make_table(vars);
         for t in table {
             println!(
                 "| {} |      {} |",
                 t.keys()
-                    .filter(|k| **k != "<".to_string())
-                    .map(|k| format!("{:>w$}", b2i(*t.get(k).unwrap()), w = k.len()))
-                    .collect::<Vec<String>>()
+                    //.map(|k| format!("{:>w$}", b2i(*t.get(k).unwrap()), w = k.len()))
+                    .map(|k| format!("{:>w$}", *t.get(k).unwrap() as i32, w = k.len()))
+                    .collect::<Vec<_>>()
                     .join(" | "),
-                b2i(interpret(ast.clone(), t))
+                interpret(ast.clone(), t) as i32
             );
         }
     }
