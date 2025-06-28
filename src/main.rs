@@ -27,7 +27,8 @@ parser! {
     }
 
     not: "!" w e=expr -> Expr { Expr::Not(e.into()) }
-
+    unary = w (term | not | ("(" expr ")")) w -> Expr;
+    // solution from untwine doc examples
     operator: val=<("&" | "|" | "=>" | "<=>")> -> String { val.to_string() }
     binary: left=unary w rest=(w operator w binary)* -> Expr {
         rest.into_iter().fold(left, |l, (op, r)| {
@@ -42,31 +43,7 @@ parser! {
         })
     }
 
-    unary = w (term | not | ("(" expr ")")) w -> Expr;
-
-         /*
-    or: left=unary w rest=(w ("||" | "|") w unary)* -> Expr {
-        box_expr(left, rest, Expr::Or)
-    }
-
-    and: left=or w rest=(w ("&&" | "&") w or)* -> Expr {
-        box_expr(left, rest, Expr::And)
-    }
-
-    imply: left=and w rest=(w "=>" w and)* -> Expr {
-        box_expr(left, rest, Expr::Imply)
-    }
-
-    equiv: left=imply w rest=(w "<=>" w imply)* -> Expr {
-        box_expr(left, rest, Expr::Equiv)
-    }
-         */
-
-
-
-
     pub expr = w (binary | unary) w -> Expr;
-    //pub expr = w equiv w -> Expr;
 }
 
 fn box_expr(left: Expr, rest: Vec<Expr>, f: fn(Box<Expr>, Box<Expr>) -> Expr) -> Expr {
