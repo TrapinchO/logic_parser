@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::env;
 use std::io::{self, BufRead};
 
-use untwine::{parse, parser, parser_repl};
+use untwine::{parse, parser};
 
 #[derive(Debug, Clone)]
 enum Expr {
@@ -18,7 +18,11 @@ enum Expr {
 
 parser! {
     w = #["\n\r\t "]*;
-    term: term=<('a'-'z' | 'A'-'Z')+> -> Expr {
+    ident = <('a'-'z' | 'A'-'Z')+> -> &str;
+    operator: val=<("&" | "|" | "=>" | "<=>")> -> String { val.to_string() }
+
+
+    term: term=ident -> Expr {
         match term {
             "true" => Expr::True,
             "false" => Expr::False,
@@ -29,7 +33,6 @@ parser! {
     not: "!" w e=expr -> Expr { Expr::Not(e.into()) }
     unary = w (term | not | ("(" expr ")")) w -> Expr;
     // solution from untwine doc examples
-    operator: val=<("&" | "|" | "=>" | "<=>")> -> String { val.to_string() }
     binary: left=unary w rest=(w operator w binary)* -> Expr {
         rest.into_iter().fold(left, |l, (op, r)| {
             let typ = match op.as_str() {
@@ -44,10 +47,9 @@ parser! {
     }
 
     pub expr = w (binary | unary) w -> Expr;
-}
-
-fn box_expr(left: Expr, rest: Vec<Expr>, f: fn(Box<Expr>, Box<Expr>) -> Expr) -> Expr {
-    rest.into_iter().fold(left, |l, r| f(l.into(), r.into()))
+    pub start: start=(w ident w "=" w expr ";" w)* -> Vec<(String, Expr)> {
+        start.into_iter().map(|(s, e)| (s.to_string(), e)).collect::<Vec<_>>()
+    }
 }
 
 fn interpret(expr: Expr, vars: HashMap<String, bool>) -> bool {
@@ -118,27 +120,31 @@ fn get_vars_(expr: Expr) -> Vec<String> {
 }
 
 fn make_table(vars: HashSet<String>) -> Vec<HashMap<String, bool>> {
-    // needs temporary entry so that the vector is not empty
-    let mut tables: Vec<HashMap<String, bool>> = vec![HashMap::from([("<".to_string(), false)])];
-    for v in vars {
+    // assumes there is at least one var
+    // which is reasonable I would say
+    let mut it = vars.iter();
+
+    let first = it.next().unwrap().clone();
+    let mut tables: Vec<HashMap<String, bool>> = vec![
+        HashMap::from([(first.clone(), false)]),
+        HashMap::from([(first, true)]),
+    ];
+
+    for v in it {
         let mut ls2 = vec![];
         for table in tables {
             let mut new_table = table.clone();
-            let mut new_table2 = table.clone();
             new_table.insert(v.clone(), false);
-            new_table2.insert(v.clone(), true);
             ls2.push(new_table);
+
+            let mut new_table2 = table.clone();
+            new_table2.insert(v.clone(), true);
+
             ls2.push(new_table2);
         }
         tables = ls2;
     }
-    let mut tables2 = vec![];
-    for t in tables {
-        let mut t2 = t.clone();
-        t2.remove("<");
-        tables2.push(t2);
-    }
-    tables2
+    tables
 }
 
 fn main() {
@@ -151,25 +157,42 @@ fn main() {
         println!("##########");
         let stdin = io::stdin();
         let line1 = stdin.lock().lines().next().unwrap().unwrap();
-        let ast = parse(expr, &line1).unwrap();
+        let ast = parse(start, &line1).unwrap();
         //println!("{:?}", ast.clone());
 
-        let vars = get_vars(ast.clone());
+        let (names, asts): (Vec<String>, Vec<Expr>) = ast.into_iter().unzip();
+        let vars = asts.iter().flat_map(|e| get_vars(e.clone())).collect::<HashSet<String>>();
+        let mut vars_sorted = vars.clone().into_iter().collect::<Vec<_>>();
+        vars_sorted.sort();
+
+        println!(
+            "| {} ||| {} |",
+            vars_sorted.join(" | "),
+            names.join(" | ")
+        );
+        for i in make_table(vars) {
+            println!("{:?}", i);
+        }
+        /*
         println!(
             "| {} | result |",
-            vars.iter()
+            ast.iter().map(|v| v.iter()
                 .map(|k| k.clone())
                 .collect::<Vec<String>>()
                 .join(" | ")
-        );
+        )
+                .collect::<Vec<String>>()
+                .join(" | ")
+            );
         println!(
             "|-{}-|--------|",
-            vars.iter()
+            ast.iter()
                 .map(|k| "-".repeat(k.len()))
                 .collect::<Vec<String>>()
                 .join("-|-")
         );
-
+        */
+        /*
         let table = make_table(vars);
         for t in table {
             println!(
@@ -182,5 +205,6 @@ fn main() {
                 interpret(ast.clone(), t) as i32
             );
         }
+        */
     }
 }
